@@ -1,0 +1,50 @@
+{
+  "name": "orchestrator-server",
+  "version": "1.0.0",
+  "description": "MCP server for task orchestration and coordination",
+  "type": "module",
+  "main": "build/index.js",
+  "scripts": {
+    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+    "start": "node build/index.js",
+    "dev": "tsc-watch --onSuccess \"node build/index.js\"",
+    "test": "node test/test-instance.js",
+    "test:coordination": "node test/coordination-test.js",
+    "clean": "rm -rf build/",
+    "prepare": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "orchestration",
+    "task-management",
+    "coordination"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "tsc-watch": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "build/",
+    "data/",
+    "docs/",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/username/orchestrator-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/username/orchestrator-server/issues"
+  },
+  "homepage": "https://github.com/username/orchestrator-server#readme"
+}

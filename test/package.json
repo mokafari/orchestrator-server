@@ -1,0 +1,9 @@
+{
+  "name": "orchestrator-server-tests",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "0.6.0"
+  }
+}
