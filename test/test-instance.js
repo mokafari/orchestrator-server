@@ -18,20 +18,6 @@ function log(message, data = null) {
   console.log('-'.repeat(80));
 }
 
-// Load tasks from file
-function loadTasks() {
-  try {
-    if (existsSync(TASKS_FILE)) {
-      const data = readFileSync(TASKS_FILE, 'utf8');
-      return JSON.parse(data);
-    }
-    return {};
-  } catch (error) {
-    console.error('Error loading tasks:', error);
-    return {};
-  }
-}
-
 // Save tasks to file
 function saveTasks(tasks) {
   try {
@@ -41,26 +27,76 @@ function saveTasks(tasks) {
   }
 }
 
-// Get open tasks (pending or in-progress)
-function getOpenTasks(tasks) {
-  return Object.values(tasks).filter(task => 
-    task.status === 'pending' || task.status === 'in_progress'
-  );
-}
-
-// Get available tasks (pending with satisfied dependencies)
-function getAvailableTasks(tasks) {
-  return Object.values(tasks).filter(task => {
-    if (task.status !== 'pending') return false;
-    if (!task.dependencies) return true;
-    return task.dependencies.every(depId => tasks[depId]?.status === 'completed');
-  });
+// Get available tools
+function getAvailableTools() {
+  return [
+    {
+      name: "create_task",
+      description: "Create a new task",
+      parameters: {
+        id: "Unique identifier for the task",
+        description: "Description of the task",
+        dependencies: "Optional array of task IDs that must be completed first"
+      }
+    },
+    {
+      name: "update_task",
+      description: "Update an existing pending task",
+      parameters: {
+        task_id: "ID of the task to update",
+        description: "Optional new description for the task",
+        dependencies: "Optional new list of dependency task IDs"
+      }
+    },
+    {
+      name: "delete_task",
+      description: "Delete a task if it has no dependents",
+      parameters: {
+        task_id: "ID of the task to delete"
+      }
+    },
+    {
+      name: "get_next_task",
+      description: "Get the next available task",
+      parameters: {
+        instance_id: "ID of the instance requesting work"
+      }
+    },
+    {
+      name: "complete_task",
+      description: "Mark a task as completed",
+      parameters: {
+        task_id: "ID of the task to complete",
+        instance_id: "ID of the instance completing the task",
+        result: "Result or output from the task"
+      }
+    },
+    {
+      name: "get_task_status",
+      description: "Get status of all tasks",
+      parameters: {}
+    },
+    {
+      name: "get_task_details",
+      description: "Get details of a specific task",
+      parameters: {
+        task_id: "ID of the task to get details for"
+      }
+    }
+  ];
 }
 
 class TestInstance {
   constructor(id, tasks) {
     this.id = id;
     this.tasks = tasks;
+  }
+
+  async listTools() {
+    log(`[${this.id}] Listing available tools`);
+    const tools = getAvailableTools();
+    log('Available tools:', tools);
+    return tools;
   }
 
   async createTask(id, description, dependencies) {
@@ -89,6 +125,72 @@ class TestInstance {
     saveTasks(this.tasks);
     log(`[${this.id}] Created task:`, task);
     return task;
+  }
+
+  async updateTask(taskId, description, dependencies) {
+    log(`[${this.id}] Updating task ${taskId}`);
+
+    const task = this.tasks[taskId];
+    if (!task) {
+      throw new Error(`Task ${taskId} not found`);
+    }
+
+    if (task.status !== 'pending') {
+      throw new Error(`Cannot update task ${taskId} in ${task.status} state`);
+    }
+
+    if (dependencies) {
+      // Check for cycles
+      const visited = new Set();
+      const checkCycle = (id) => {
+        if (visited.has(id)) return true;
+        visited.add(id);
+        return (this.tasks[id]?.dependencies || []).some(depId => checkCycle(depId));
+      };
+
+      for (const depId of dependencies) {
+        if (!this.tasks[depId]) {
+          throw new Error(`Dependency task ${depId} not found`);
+        }
+        if (depId === taskId || checkCycle(depId)) {
+          throw new Error(`Dependencies would create a cycle`);
+        }
+      }
+      task.dependencies = dependencies;
+    }
+
+    if (description) {
+      task.description = description;
+    }
+
+    saveTasks(this.tasks);
+    log(`[${this.id}] Updated task:`, task);
+    return task;
+  }
+
+  async deleteTask(taskId) {
+    log(`[${this.id}] Deleting task ${taskId}`);
+
+    const task = this.tasks[taskId];
+    if (!task) {
+      throw new Error(`Task ${taskId} not found`);
+    }
+
+    // Check for dependent tasks
+    const dependentTasks = Object.values(this.tasks).filter(t => 
+      t.dependencies?.includes(taskId)
+    );
+
+    if (dependentTasks.length > 0) {
+      throw new Error(
+        `Cannot delete task ${taskId} as it has dependent tasks: ${dependentTasks.map(t => t.id).join(', ')}`
+      );
+    }
+
+    delete this.tasks[taskId];
+    saveTasks(this.tasks);
+    log(`[${this.id}] Deleted task ${taskId}`);
+    return { deleted: taskId };
   }
 
   async getNextTask() {
@@ -162,47 +264,52 @@ class TestInstance {
   }
 }
 
-// Run test to work on open tasks
+// Run test to demonstrate task management
 async function runTest() {
   try {
-    // Load existing tasks
-    const tasks = loadTasks();
-    log('Loaded existing tasks:', tasks);
+    // Start with empty tasks
+    const tasks = {};
+    saveTasks(tasks);
+    log('Starting with clean state');
 
-    // Check for open and available tasks
-    const openTasks = getOpenTasks(tasks);
-    log('Open tasks:', openTasks);
-    
-    const availableTasks = getAvailableTasks(tasks);
-    log('Available tasks (dependencies satisfied):', availableTasks);
+    // Create manager instance
+    const manager = new TestInstance('manager', tasks);
 
-    // Create instances for different roles
-    const contentWriter = new TestInstance('content-writer', tasks);
-    const sysAdmin = new TestInstance('sys-admin', tasks);
-    const docWriter = new TestInstance('doc-writer', tasks);
+    // List available tools
+    await manager.listTools();
 
-    // Content writer works on content task
-    const contentTask = await contentWriter.getNextTask();
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate work
-    await contentWriter.completeTask('finalize-casino-content', 'Content guidelines and templates created');
+    // Create initial tasks
+    await manager.createTask('setup', 'Initial setup');
+    await manager.createTask('config', 'Configuration', ['setup']);
+    await manager.createTask('deploy', 'Deployment', ['config']);
 
-    // System admin works on monitoring and backup
-    const monitorTask = await sysAdmin.getNextTask();
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate work
-    await sysAdmin.completeTask('monitor', 'Monitoring system configured and running');
+    // Try to update a task
+    await manager.updateTask('config', 'Update system configuration', ['setup']);
 
-    const backupTask = await sysAdmin.getNextTask();
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate work
-    await sysAdmin.completeTask('backup', 'Backup system configured and tested');
+    // Try to delete a task with dependents (should fail)
+    try {
+      await manager.deleteTask('setup');
+    } catch (error) {
+      log('Expected error:', error.message);
+    }
 
-    // Documentation writer works on docs
-    const docsTask = await docWriter.getNextTask();
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate work
-    await docWriter.completeTask('docs', 'Documentation updated with deployment and monitoring details');
+    // Complete tasks in order
+    const setupTask = await manager.getNextTask(); // get setup
+    await manager.completeTask('setup', 'System initialized');
 
-    // Check final open tasks
-    const remainingTasks = getOpenTasks(tasks);
-    log('Remaining open tasks:', remainingTasks);
+    const configTask = await manager.getNextTask(); // get config
+    await manager.completeTask('config', 'System configured');
+
+    const deployTask = await manager.getNextTask(); // get deploy
+    await manager.completeTask('deploy', 'System deployed');
+
+    // Now we can delete tasks since they're completed and not needed
+    await manager.deleteTask('deploy');
+    await manager.deleteTask('config');
+    await manager.deleteTask('setup');
+
+    // Check final state
+    await manager.checkTaskStatus();
 
     log('Test completed successfully');
   } catch (error) {

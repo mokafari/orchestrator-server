@@ -70,7 +70,7 @@ function debug(message: string, ...args: any[]) {
 const server = new Server(
   {
     name: "orchestrator-server",
-    version: "0.1.0",
+    version: "1.0.0",
   },
   {
     capabilities: {
@@ -124,6 +124,95 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [{
             type: "text",
             text: JSON.stringify(task, null, 2)
+          }]
+        };
+      }
+
+      case "update_task": {
+        const { task_id, description, dependencies } = request.params.arguments as {
+          task_id: string;
+          description?: string;
+          dependencies?: string[];
+        };
+
+        debug(`Updating task ${task_id}`);
+
+        const task = tasks[task_id];
+        if (!task) {
+          throw new McpError(ErrorCode.InvalidRequest, `Task ${task_id} not found`);
+        }
+
+        if (task.status !== 'pending') {
+          throw new McpError(ErrorCode.InvalidRequest, `Cannot update task ${task_id} in ${task.status} state`);
+        }
+
+        // Verify dependencies exist and don't create cycles
+        if (dependencies) {
+          const visited = new Set<string>();
+          const checkCycle = (taskId: string): boolean => {
+            if (visited.has(taskId)) return true;
+            visited.add(taskId);
+            return (tasks[taskId]?.dependencies || []).some(depId => checkCycle(depId));
+          };
+
+          for (const depId of dependencies) {
+            if (!tasks[depId]) {
+              throw new McpError(ErrorCode.InvalidRequest, `Dependency task ${depId} not found`);
+            }
+            if (depId === task_id || checkCycle(depId)) {
+              throw new McpError(ErrorCode.InvalidRequest, `Dependencies would create a cycle`);
+            }
+          }
+          task.dependencies = dependencies;
+        }
+
+        if (description) {
+          task.description = description;
+        }
+
+        saveTasks();
+        debug(`Updated task ${task_id}`);
+
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify(task, null, 2)
+          }]
+        };
+      }
+
+      case "delete_task": {
+        const { task_id } = request.params.arguments as {
+          task_id: string;
+        };
+
+        debug(`Deleting task ${task_id}`);
+
+        const task = tasks[task_id];
+        if (!task) {
+          throw new McpError(ErrorCode.InvalidRequest, `Task ${task_id} not found`);
+        }
+
+        // Check if any other tasks depend on this one
+        const dependentTasks = Object.values(tasks).filter(t => 
+          t.dependencies?.includes(task_id)
+        );
+
+        if (dependentTasks.length > 0) {
+          throw new McpError(
+            ErrorCode.InvalidRequest, 
+            `Cannot delete task ${task_id} as it has dependent tasks: ${dependentTasks.map(t => t.id).join(', ')}`
+          );
+        }
+
+        delete tasks[task_id];
+        saveTasks();
+        debug(`Deleted task ${task_id}`);
+
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({ deleted: task_id }, null, 2)
           }]
         };
       }
@@ -269,6 +358,45 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             }
           },
           required: ["id", "description"]
+        }
+      },
+      {
+        name: "update_task",
+        description: "Update an existing pending task",
+        inputSchema: {
+          type: "object",
+          properties: {
+            task_id: {
+              type: "string",
+              description: "ID of the task to update"
+            },
+            description: {
+              type: "string",
+              description: "New description for the task"
+            },
+            dependencies: {
+              type: "array",
+              items: {
+                type: "string"
+              },
+              description: "New list of dependency task IDs"
+            }
+          },
+          required: ["task_id"]
+        }
+      },
+      {
+        name: "delete_task",
+        description: "Delete a task if it has no dependents",
+        inputSchema: {
+          type: "object",
+          properties: {
+            task_id: {
+              type: "string",
+              description: "ID of the task to delete"
+            }
+          },
+          required: ["task_id"]
         }
       },
       {
