@@ -4,6 +4,8 @@
 
 The MCP Orchestrator Server provides task management and coordination capabilities for distributed systems.
 
+<a href="https://glama.ai/mcp/servers/6hfxiaiuwg"><img width="380" height="200" src="https://glama.ai/mcp/servers/6hfxiaiuwg/badge" alt="Orchestrator Server MCP server" /></a>
+
 ## Features
 
 ### Version 1.1.0
