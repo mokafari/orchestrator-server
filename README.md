@@ -1,6 +1,7 @@
 # MCP Orchestrator Server
 
 [![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](CHANGELOG.md)
+[![smithery badge](https://smithery.ai/badge/orchestrator-server)](https://smithery.ai/server/orchestrator-server)
 
 The MCP Orchestrator Server provides task management and coordination capabilities across MCP enabled LLM instances like Claude Desktop or Cline. In simpler terms it allows for AI agents to create, share and execute tasks across instances 
 
@@ -24,6 +25,15 @@ The MCP Orchestrator Server provides task management and coordination capabiliti
 
 ## Installation
 
+### Installing via Smithery
+
+To install Orchestrator Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/orchestrator-server):
+
+```bash
+npx -y @smithery/cli install orchestrator-server --client claude
+```
+
+### Manual Installation
 ```bash
 npm install
 npm run build
