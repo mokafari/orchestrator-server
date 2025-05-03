@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/mokafari-orchestrator-server-badge.png)](https://mseep.ai/app/mokafari-orchestrator-server)
+
 # MCP Orchestrator Server
 
 [![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](CHANGELOG.md)
